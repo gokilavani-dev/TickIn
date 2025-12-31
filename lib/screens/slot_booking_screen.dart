@@ -10,6 +10,9 @@ class SlotBookingScreen extends StatefulWidget {
 }
 
 class _SlotBookingScreenState extends State<SlotBookingScreen> {
+  final TextEditingController globalAmountCtrl = TextEditingController();
+  final TextEditingController amountCtrl = TextEditingController();
+
   bool loading = true;
 
   List<Map<String, dynamic>> slots = [];
@@ -23,7 +26,6 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
   int totalAmount = 0;
   DateTime selectedDate = DateTime.now();
 
-  final TextEditingController amountCtrl = TextEditingController();
   final int fullTruckLimit = 80000;
 
   /* ===============================
@@ -32,14 +34,21 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
   bool get isManager => AuthApi.user?["role"] == "MANAGER";
   bool get isDistributor => AuthApi.user?["role"] == "DISTRIBUTOR";
 
-  bool get isBookingMode => bookingId != null && bookingId!.isNotEmpty;
+  bool get isAfter5PM => DateTime.now().hour >= 17;
+
+  /// booking mode only if came from order
+  bool get isBookingMode =>
+      bookingId != null &&
+      bookingId!.isNotEmpty &&
+      distributorCode != null &&
+      distributorCode!.isNotEmpty &&
+      totalAmount > 0;
+
   bool get showDistributorName => isBookingMode && !isDistributor;
 
   bool get isFullTruck => totalAmount >= fullTruckLimit;
 
   String get companyCode => AuthApi.user?["companyId"] ?? "";
-
-  bool get isAfter5PM => DateTime.now().hour >= 17;
 
   /* ===============================
      INIT
@@ -50,7 +59,8 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
 
     final args =
         ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    debugPrint("SLOT BOOKING ARGS => $args"); // 👈 ADD THIS
+
+    debugPrint("SLOT BOOKING ARGS => $args");
 
     bookingId = args?["bookingId"];
     distributorName = args?["distributorName"];
@@ -59,7 +69,6 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
     totalAmount = (args?["amount"] as num?)?.round() ?? 0;
 
     amountCtrl.text = totalAmount.toString();
-    debugPrint("distributorCode => $distributorCode"); // 👈 ADD THIS
   }
 
   @override
@@ -69,7 +78,7 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
   }
 
   /* ===============================
-     FETCH SLOTS
+     FETCH SLOTS (FINAL RULE)
   =============================== */
   Future<void> fetchSlots() async {
     final dateStr =
@@ -78,20 +87,43 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
     final res = await SlotApi.getSlots(companyCode: companyCode, date: dateStr);
     final allSlots = List<Map<String, dynamic>>.from(res);
 
-    // ✅ AFTER 5 PM RULE
-    if (!isManager && !isAfter5PM) {
-      slots = allSlots.take(12).toList();
-    } else if (!isManager && isAfter5PM) {
-      final lastSlotOpened = allSlots.any(
-        (s) => s["time"] == "20:30" && s["status"] == "AVAILABLE",
-      );
-      slots = lastSlotOpened ? allSlots : allSlots.take(12).toList();
+    if (isManager) {
+      /// ✅ Manager always sees all 16 slots
+      slots = allSlots;
     } else {
-      slots = allSlots; // manager always sees all
+      if (!isAfter5PM) {
+        slots = allSlots.take(12).toList();
+      } else {
+        final lastSlotAvailable = allSlots.any(
+          (s) => s["time"] == "20:30" && s["status"] == "AVAILABLE",
+        );
+        slots = lastSlotAvailable ? allSlots : allSlots.take(12).toList();
+      }
     }
 
     if (!mounted) return;
     setState(() => loading = false);
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDate,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(
+        const Duration(days: 1),
+      ), // 👈 inniku & naalaiku
+    );
+
+    if (picked != null && picked != selectedDate) {
+      setState(() {
+        selectedDate = picked;
+        loading = true;
+        selectedIndex = null;
+      });
+
+      await fetchSlots();
+    }
   }
 
   /* ===============================
@@ -104,32 +136,16 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
   }
 
   /* ===============================
-     BOOK SLOT (SAFE)
+     BOOK SLOT
   =============================== */
   Future<void> bookSelectedSlot() async {
     if (!isBookingMode || selectedIndex == null) return;
 
-    if (distributorCode == null || distributorCode!.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Distributor not found")));
-      return;
-    }
-
     final slot = slots[selectedIndex!];
-    debugPrint(
-      "BOOK SLOT PAYLOAD => "
-      "companyCode=$companyCode, "
-      "date=$selectedDate, "
-      "time=${slot["time"]}, "
-      "vehicleType=${isFullTruck ? "FULL" : "HALF"}, "
-      "pos=${slot["pos"]}, "
-      "distributorCode=$distributorCode, "
-      "amount=$totalAmount",
-    );
+
     await SlotApi.bookSlot(
       companyCode: companyCode,
-      date: "${selectedDate.year}-${selectedDate.month}-${selectedDate.day}",
+      date: _fmtDate(selectedDate),
       time: slot["time"],
       vehicleType: isFullTruck ? "FULL" : "HALF",
       pos: slot["pos"],
@@ -141,141 +157,112 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
     Navigator.pop(context, true);
   }
 
+  /* ===============================
+     MANAGER SLOT ACTIONS
+  =============================== */
   Future<void> _openManagerSlotActions(Map<String, dynamic> slot) async {
-    final TextEditingController maxAmountCtrl = TextEditingController(
-      text: (slot["maxAmount"] ?? slot["max_amount"] ?? "").toString(),
-    );
-
-    // time edit controls
     String currentTime = (slot["time"] ?? "").toString();
     String editedTime = currentTime;
-
     bool doDelete = false;
 
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom,
-            left: 16,
-            right: 16,
-            top: 16,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                "Manager Slot Actions (${slot["time"]})",
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+              left: 16,
+              right: 16,
+              top: 16,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Manager Slot Actions ($currentTime)",
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  DropdownButtonFormField<String>(
+                    initialValue: editedTime,
+                    items: slots
+                        .map((s) => (s["time"] ?? "").toString())
+                        .toSet()
+                        .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) editedTime = v;
+                    },
+                    decoration: const InputDecoration(
+                      labelText: "Edit Slot Time",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+
+                  SwitchListTile(
+                    title: const Text("Delete / Disable slot"),
+                    value: doDelete,
+                    onChanged: (v) {
+                      doDelete = v;
+                      (ctx as Element).markNeedsBuild();
+                    },
+                  ),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      child: const Text("Save"),
+                      onPressed: () async {
+                        try {
+                          if (editedTime != currentTime) {
+                            await SlotApi.managerEditSlotTime(
+                              companyCode: companyCode,
+                              date: _fmtDate(selectedDate),
+                              oldTime: currentTime,
+                              newTime: editedTime,
+                              location:
+                                  slot["location"] ?? slot["loc"] ?? "DEFAULT",
+                            );
+                          }
+
+                          if (doDelete) {
+                            await SlotApi.managerDeleteSlot(
+                              companyCode: companyCode,
+                              date: _fmtDate(selectedDate),
+                              time: currentTime,
+                              location:
+                                  slot["location"] ?? slot["loc"] ?? "DEFAULT",
+                            );
+                          }
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Slot updated successfully"),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+
+                          Navigator.pop(ctx);
+                          setState(() => loading = true);
+                          await fetchSlots();
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("Save failed: $e")),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-
-              // ✅ 1) MaxAmount / Full truck amount override (one textbox)
-              TextField(
-                controller: maxAmountCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: "Slot Max Amount (override)",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // ✅ 2) Edit timing (simple dropdown or custom picker)
-              DropdownButtonFormField<String>(
-                initialValue: editedTime,
-                items: slots
-                    .map((s) => (s["time"] ?? "").toString())
-                    .toSet()
-                    .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                    .toList(),
-                onChanged: (v) {
-                  if (v != null) editedTime = v;
-                },
-                decoration: const InputDecoration(
-                  labelText: "Edit Slot Time",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // ✅ 3) Delete slot toggle
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text("Delete / Disable this slot"),
-                value: doDelete,
-                onChanged: (v) {
-                  doDelete = v;
-                  (ctx as Element).markNeedsBuild();
-                },
-              ),
-
-              const SizedBox(height: 12),
-
-              // ✅ Save -> DB alter -> refresh -> reflect all
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  child: const Text("Save"),
-                  onPressed: () async {
-                    try {
-                      final maxAmt = int.tryParse(maxAmountCtrl.text.trim());
-
-                      // ✅ A) set-max (optional)
-                      if (maxAmt != null && maxAmt > 0) {
-                        await SlotApi.managerSetSlotMax(
-                          companyCode: companyCode,
-                          date: _fmtDate(selectedDate),
-                          time: currentTime,
-                          location:
-                              slot["location"] ?? slot["loc"] ?? "DEFAULT",
-                          maxAmount: maxAmt,
-                        );
-                      }
-
-                      // ✅ B) edit time (only if changed)
-                      if (editedTime != currentTime) {
-                        await SlotApi.managerEditSlotTime(
-                          companyCode: companyCode,
-                          date: _fmtDate(selectedDate),
-                          oldTime: currentTime,
-                          newTime: editedTime,
-                          location:
-                              slot["location"] ?? slot["loc"] ?? "DEFAULT",
-                        );
-                      }
-
-                      // ✅ C) delete/disable slot
-                      if (doDelete) {
-                        await SlotApi.managerDeleteSlot(
-                          companyCode: companyCode,
-                          date: _fmtDate(selectedDate),
-                          time: currentTime,
-                          location:
-                              slot["location"] ?? slot["loc"] ?? "DEFAULT",
-                        );
-                      }
-
-                      if (!mounted) return;
-                      Navigator.pop(ctx);
-                      setState(() => loading = true);
-                      await fetchSlots(); // ✅ refresh -> everyone sees updated grid
-                    } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Save failed: $e")),
-                      );
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
+            ),
           ),
         );
       },
@@ -291,153 +278,180 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Slot Booking")),
+      appBar: AppBar(
+        title: const Text("Slot Booking"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.calendar_today),
+            onPressed: _pickDate,
+          ),
+        ],
+      ),
       body: loading
           ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              child: Column(
-                children: [
-                  if (showDistributorName && distributorName != null)
-                    Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Text(
-                        distributorName!,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-
-                  if (isBookingMode)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: TextField(
-                        controller: amountCtrl,
-                        enabled: false,
-                        decoration: const InputDecoration(
-                          labelText: "Amount",
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-
-                  if (isBookingMode)
-                    Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Text(
-                        isFullTruck ? "FULL TRUCK" : "HALF TRUCK",
-                        style: TextStyle(
-                          color: isFullTruck ? Colors.green : Colors.orange,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-
+          : Column(
+              children: [
+                /// ✅ MANAGER CONFIG MODE – GLOBAL AMOUNT
+                if (isManager && !isBookingMode)
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    padding: const EdgeInsets.all(12),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _legend(Colors.green.shade200, "Available"),
-                        const SizedBox(width: 12),
-                        _legend(Colors.grey.shade300, "Booked"),
+                        Expanded(
+                          child: TextField(
+                            controller: globalAmountCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: "Global Slot Max Amount",
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () async {
+                            final amt = int.tryParse(
+                              globalAmountCtrl.text.trim(),
+                            );
+                            if (amt == null || amt <= 0) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Enter valid amount"),
+                                ),
+                              );
+                              return;
+                            }
+
+                            await SlotApi.managerSetSlotMax(
+                              companyCode: companyCode,
+                              date: _fmtDate(selectedDate),
+                              time: "ALL",
+                              location: "DEFAULT",
+                              maxAmount: amt,
+                            );
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Global slot amount updated"),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+
+                            setState(() => loading = true);
+                            await fetchSlots();
+                          },
+                          child: const Text("Save"),
+                        ),
                       ],
                     ),
                   ),
 
-                  Expanded(
-                    child: GridView.builder(
-                      padding: const EdgeInsets.all(12),
-                      itemCount: slots.length,
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 4,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
-                          ),
-                      itemBuilder: (_, i) {
-                        final slot = slots[i];
-                        final selected = selectedIndex == i;
-
-                        return GestureDetector(
-                          onTap: slot["status"] == "BOOKED"
-                              ? null
-                              : () => setState(() => selectedIndex = i),
-
-                          // ✅ ADD ONLY: Manager long press actions
-                          onLongPress: !isManager
-                              ? null
-                              : () => _openManagerSlotActions(slot),
-
-                          child: Container(
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: slotColor(slot, selected),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  slot["time"],
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  slot["status"] == "BOOKED"
-                                      ? "Booked"
-                                      : "Available",
-                                  style: TextStyle(
-                                    color: slot["status"] == "BOOKED"
-                                        ? Colors.red
-                                        : Colors.green,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
+                if (showDistributorName && distributorName != null)
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Text(
+                      distributorName!,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
 
-                  if (isBookingMode)
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.check_circle),
-                          label: const Text("Book Now"),
-                          onPressed: selectedIndex == null
-                              ? null
-                              : bookSelectedSlot,
-                        ),
+                if (isBookingMode)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: TextField(
+                      controller: amountCtrl,
+                      enabled: false,
+                      decoration: const InputDecoration(
+                        labelText: "Amount",
+                        border: OutlineInputBorder(),
                       ),
                     ),
-                ],
-              ),
-            ),
-    );
-  }
+                  ),
 
-  Widget _legend(Color color, String label) {
-    return Row(
-      children: [
-        Container(
-          width: 16,
-          height: 16,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(4),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(label),
-      ],
+                if (isBookingMode)
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Text(
+                      isFullTruck ? "FULL TRUCK" : "HALF TRUCK",
+                      style: TextStyle(
+                        color: isFullTruck ? Colors.green : Colors.orange,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+
+                Expanded(
+                  child: GridView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: slots.length,
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 4,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                        ),
+                    itemBuilder: (_, i) {
+                      final slot = slots[i];
+                      final selected = selectedIndex == i;
+
+                      return GestureDetector(
+                        onTap: slot["status"] == "BOOKED"
+                            ? null
+                            : () => setState(() => selectedIndex = i),
+                        onLongPress: !isManager
+                            ? null
+                            : () => _openManagerSlotActions(slot),
+                        child: Container(
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: slotColor(slot, selected),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                slot["time"],
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                slot["status"] == "BOOKED"
+                                    ? "Booked"
+                                    : "Available",
+                                style: TextStyle(
+                                  color: slot["status"] == "BOOKED"
+                                      ? Colors.red
+                                      : Colors.green,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+                if (isBookingMode)
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: selectedIndex == null
+                            ? null
+                            : bookSelectedSlot,
+                        child: const Text("Book Now"),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
     );
   }
 }

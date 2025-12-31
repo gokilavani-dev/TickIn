@@ -202,9 +202,13 @@ class SlotApi {
     debugPrint("⬅️ SET MAX RESPONSE STATUS => ${res.statusCode}");
     debugPrint("⬅️ SET MAX RESPONSE BODY => ${res.body}");
 
+    final data = jsonDecode(res.body);
+
     if (res.statusCode != 200) {
-      throw Exception(jsonDecode(res.body)["error"] ?? "Set max failed");
+      throw Exception(data["error"] ?? "Set max failed");
     }
+
+    return data["message"] ?? "Updated successfully";
   }
 
   /* ===============================
@@ -244,7 +248,7 @@ class SlotApi {
     required String location,
   }) async {
     final res = await http.post(
-      Uri.parse("${ApiConfig.baseUrl}/api/slots/delete"),
+      Uri.parse("${ApiConfig.baseUrl}/api/slots/cancel"),
       headers: AuthApi.authHeaders(),
       body: jsonEncode({
         "companyCode": companyCode,
