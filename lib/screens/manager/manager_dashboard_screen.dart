@@ -56,7 +56,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       orderId: orderId,
       reason: reason.trim(),
     );
-
+    if (!mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text("Reason saved successfully")));
@@ -109,6 +109,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
                           // 🔽 DROPDOWN
                           DropdownButtonFormField<String>(
+                            // ignore: deprecated_member_use
                             value: selectedReasons[orderId],
                             hint: const Text("Select reason"),
                             items: reasons

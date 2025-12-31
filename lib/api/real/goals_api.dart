@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'api_config.dart';
 import 'auth_api.dart';
@@ -38,7 +39,7 @@ class GoalsApi {
     }
 
     // 🔍 DEBUG (remove later)
-    print("GOALS MAP => $goalsMap");
+    debugPrint("GOALS MAP => $goalsMap");
 
     return goalsMap;
   }

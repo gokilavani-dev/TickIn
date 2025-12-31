@@ -50,7 +50,7 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
 
     final args =
         ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    print("SLOT BOOKING ARGS => $args"); // 👈 ADD THIS
+    debugPrint("SLOT BOOKING ARGS => $args"); // 👈 ADD THIS
 
     bookingId = args?["bookingId"];
     distributorName = args?["distributorName"];
@@ -59,7 +59,7 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
     totalAmount = (args?["amount"] as num?)?.round() ?? 0;
 
     amountCtrl.text = totalAmount.toString();
-    print("distributorCode => $distributorCode"); // 👈 ADD THIS
+    debugPrint("distributorCode => $distributorCode"); // 👈 ADD THIS
   }
 
   @override
@@ -117,7 +117,7 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
     }
 
     final slot = slots[selectedIndex!];
-    print(
+    debugPrint(
       "BOOK SLOT PAYLOAD => "
       "companyCode=$companyCode, "
       "date=$selectedDate, "
@@ -188,7 +188,7 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
 
               // ✅ 2) Edit timing (simple dropdown or custom picker)
               DropdownButtonFormField<String>(
-                value: editedTime,
+                initialValue: editedTime,
                 items: slots
                     .map((s) => (s["time"] ?? "").toString())
                     .toSet()

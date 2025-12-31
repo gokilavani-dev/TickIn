@@ -109,7 +109,7 @@ class _SalesCreateOrderScreenState extends State<SalesCreateOrderScreen> {
                       labelText: "Select Distributor",
                       border: OutlineInputBorder(),
                     ),
-                    value: selectedDistributor,
+                    initialValue: selectedDistributor,
                     items: distributors
                         .map(
                           (d) => DropdownMenuItem(

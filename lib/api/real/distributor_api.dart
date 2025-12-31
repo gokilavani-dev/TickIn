@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'api_config.dart';
@@ -15,8 +16,8 @@ class DistributorApi {
     );
 
     // DEBUG
-    print("DISTRIBUTOR API STATUS => ${res.statusCode}");
-    print("DISTRIBUTOR API BODY => ${res.body}");
+    debugPrint("DISTRIBUTOR API STATUS => ${res.statusCode}");
+    debugPrint("DISTRIBUTOR API BODY => ${res.body}");
 
     final data = jsonDecode(res.body);
 

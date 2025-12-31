@@ -23,8 +23,19 @@ class AuthApi {
 
     token = data["token"];
     user = data["user"];
+
+    debugPrint("🟢 LOGIN SUCCESS");
     debugPrint("STATUS => ${res.statusCode}");
-    debugPrint("BODY => ${res.body}");
+
+    // 🔐 USER DETAILS (MOST IMPORTANT)
+    debugPrint("USER ID => ${user?['id'] ?? user?['pk']}");
+    debugPrint("USER ROLE => ${user?['role']}");
+    debugPrint(
+      "USER distributorCode => ${user?['distributorCode'] ?? user?['distributor_code'] ?? user?['distributor']}",
+    );
+
+    // (optional – full user object)
+    debugPrint("FULL USER OBJECT => $user");
   }
 
   // ✅ ADD THIS METHOD

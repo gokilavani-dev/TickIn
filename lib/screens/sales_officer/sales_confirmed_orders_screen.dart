@@ -85,7 +85,7 @@ class _SalesConfirmedOrdersScreenState
      ORDER CARD (INLINE BOOK SLOT ADDED)
   =============================== */
   Widget _orderCard(Map<String, dynamic> order) {
-    print("ORDER CARD DATA => $order"); // 👈 ADD
+    debugPrint("ORDER CARD DATA => $order"); // 👈 ADD
     final bool slotBooked = order["slotBooked"] == true;
 
     return Card(

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'api_config.dart';
 import 'auth_api.dart';
@@ -35,6 +36,11 @@ class SlotApi {
     required String vehicleType,
     String? pos,
   }) async {
+    debugPrint("🛠 MANAGER DELETE SLOT CALL");
+    debugPrint("👤 ROLE => ${AuthApi.user?['role']}");
+    debugPrint(
+      "📦 PAYLOAD => ${{"companyCode": companyCode, "date": date, "time": time, "pos": pos}}",
+    );
     final res = await http.post(
       Uri.parse("${ApiConfig.baseUrl}/api/slots/cancel"),
       headers: AuthApi.authHeaders(),
@@ -46,7 +52,8 @@ class SlotApi {
         "pos": pos,
       }),
     );
-
+    debugPrint("⬅️ DELETE SLOT RESPONSE STATUS => ${res.statusCode}");
+    debugPrint("⬅️ DELETE SLOT RESPONSE BODY => ${res.body}");
     final data = jsonDecode(res.body);
     if (data["ok"] != true) {
       throw Exception(data["error"] ?? "Delete failed");
@@ -64,6 +71,12 @@ class SlotApi {
     required String vehicleType,
     String? pos,
   }) async {
+    debugPrint("🛠 MANAGER EDIT SLOT TIME CALL");
+    debugPrint("👤 ROLE => ${AuthApi.user?['role']}");
+    debugPrint(
+      "📦 PAYLOAD => ${{"companyCode": companyCode, "date": date, "oldTime": oldTime, "newTime": newTime, "vehicleType": vehicleType, "pos": pos}}",
+    );
+
     final res = await http.post(
       Uri.parse("${ApiConfig.baseUrl}/api/slots/edit-time"),
       headers: AuthApi.authHeaders(),
@@ -76,6 +89,9 @@ class SlotApi {
         "pos": pos,
       }),
     );
+
+    debugPrint("⬅️ EDIT TIME RESPONSE STATUS => ${res.statusCode}");
+    debugPrint("⬅️ EDIT TIME RESPONSE BODY => ${res.body}");
 
     final data = jsonDecode(res.body);
     if (data["ok"] != true) {
@@ -126,6 +142,11 @@ class SlotApi {
       "distributorCode": distributorCode,
       "amount": amount,
     };
+    debugPrint("🚀 SLOT BOOK REQUEST PAYLOAD => $body");
+    debugPrint(
+      "🔐 TOKEN distributorCode => ${AuthApi.user?['distributorCode'] ?? AuthApi.user?['distributor_code'] ?? AuthApi.user?['distributor']}",
+    );
+    debugPrint("👤 TOKEN role => ${AuthApi.user?['role']}");
 
     // ✅ FULL booking → pos mandatory
     if (vehicleType == "FULL") {
@@ -144,6 +165,9 @@ class SlotApi {
     final data = jsonDecode(res.body);
 
     if (res.statusCode != 200 || data["ok"] != true) {
+      debugPrint("❌ SLOT BOOK FAILED");
+      debugPrint("STATUS => ${res.statusCode}");
+      debugPrint("RESPONSE => $data");
       throw Exception(data["error"] ?? "Slot booking failed");
     }
   }
@@ -158,6 +182,12 @@ class SlotApi {
     required String location,
     required int maxAmount,
   }) async {
+    debugPrint("🛠 MANAGER SET MAX AMOUNT CALL");
+    debugPrint("👤 ROLE => ${AuthApi.user?['role']}");
+    debugPrint("🔐 TOKEN => ${AuthApi.token}");
+    debugPrint(
+      "📦 PAYLOAD => ${{"companyCode": companyCode, "date": date, "time": time, "location": location, "maxAmount": maxAmount}}",
+    );
     final res = await http.post(
       Uri.parse("${ApiConfig.baseUrl}/api/slots/set-max"),
       headers: AuthApi.authHeaders(),
@@ -169,6 +199,8 @@ class SlotApi {
         "maxAmount": maxAmount,
       }),
     );
+    debugPrint("⬅️ SET MAX RESPONSE STATUS => ${res.statusCode}");
+    debugPrint("⬅️ SET MAX RESPONSE BODY => ${res.body}");
 
     if (res.statusCode != 200) {
       throw Exception(jsonDecode(res.body)["error"] ?? "Set max failed");
