@@ -125,11 +125,10 @@ class SlotApi {
   /* ===============================
      ✅ BOOK SLOT (REAL API)
   =============================== */
-  static Future<void> bookSlot({
+  static Future<Map<String, dynamic>> bookSlot({
     required String companyCode,
     required String date,
     required String time,
-    required String vehicleType, // FULL / HALF
     String? pos,
     required String distributorCode,
     int amount = 0,
@@ -138,7 +137,6 @@ class SlotApi {
       "companyCode": companyCode,
       "date": date,
       "time": time,
-      "vehicleType": vehicleType,
       "distributorCode": distributorCode,
       "amount": amount,
     };
@@ -148,13 +146,13 @@ class SlotApi {
     );
     debugPrint("👤 TOKEN role => ${AuthApi.user?['role']}");
 
-    // ✅ FULL booking → pos mandatory
-    if (vehicleType == "FULL") {
-      if (pos == null) {
-        throw Exception("pos required for FULL booking");
-      }
-      body["pos"] = pos;
-    }
+    // // ✅ FULL booking → pos mandatory
+    // if (vehicleType == "FULL") {
+    //   if (pos == null) {
+    //     throw Exception("pos required for FULL booking");
+    //   }
+    //   body["pos"] = pos;
+    // }
 
     final res = await http.post(
       Uri.parse("${ApiConfig.baseUrl}/api/slots/book"),
@@ -170,6 +168,7 @@ class SlotApi {
       debugPrint("RESPONSE => $data");
       throw Exception(data["error"] ?? "Slot booking failed");
     }
+    return data;
   }
 
   /* ===============================

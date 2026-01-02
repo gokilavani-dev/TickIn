@@ -32,7 +32,6 @@ void main() {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -86,7 +85,7 @@ class MyApp extends StatelessWidget {
         // OTHER ROLES
         // =========================
         "/distributor-home": (context) => const DistributorHomeScreen(),
-        "/driver": (context) => const DriverHomeScreen(),
+        "/driver": (context) => const DriverOrdersScreen(),
 
         "/master": (context) => const MasterDashboardScreen(),
       },
