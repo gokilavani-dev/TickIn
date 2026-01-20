@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import '../constants/textstyles.dart';
 
 class TransactionsScreen extends StatelessWidget {
@@ -8,8 +9,15 @@ class TransactionsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Text('Transactions', style: AppTextStyles.title),
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Lottie.asset('assets/lottie/empty.json', width: 160, height: 160),
+          const SizedBox(height: 16),
+          const Text('Transactions', style: AppTextStyles.title),
+        ],
+      ),
     );
   }
 }

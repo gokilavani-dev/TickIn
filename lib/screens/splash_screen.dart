@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import '../constants/textstyles.dart';
 
 class SplashScreen extends StatelessWidget {
@@ -8,9 +9,16 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       body: Center(
-        child: Text('Expense Tracker', style: AppTextStyles.headline),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Lottie.asset('assets/lottie/splash.json', width: 160, height: 160),
+            const SizedBox(height: 16),
+            const Text('Expense Tracker', style: AppTextStyles.headline),
+          ],
+        ),
       ),
     );
   }
